@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ABEP Mission Planner</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:#020617;color:#f1f5f9;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;display:flex;flex-direction:column}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0f172a}::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+input[type=range]{-webkit-appearance:none;appearance:none;outline:none;height:6px;border-radius:3px;cursor:pointer;width:100%;display:block}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#06b6d4;cursor:pointer;box-shadow:0 0 8px rgba(6,182,212,.4)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#06b6d4;cursor:pointer;border:none}
+#hdr{border-bottom:1px solid #1e293b;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;min-height:52px}
+#main{display:flex;flex:1;min-height:0}
+#left{width:218px;flex-shrink:0;border-right:1px solid #1e293b;padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:0}
+#center{flex:1;min-width:0;padding:14px;display:flex;flex-direction:column;overflow:hidden}
+#right{width:268px;flex-shrink:0;border-left:1px solid #1e293b;padding:14px;display:flex;flex-direction:column;overflow-y:auto}
+#btm{border-top:1px solid #1e293b;padding:8px 20px 6px;height:172px;flex-shrink:0;display:flex;flex-direction:column}
+.lbl{font-size:10px;font-weight:700;color:#475569;letter-spacing:.12em;text-transform:uppercase}
+.card{background:#0f172a;border-radius:8px;border:1px solid #1e293b;padding:10px}
+.run-btn{width:100%;padding:9px;border-radius:8px;border:1px solid rgba(6,182,212,.4);background:rgba(6,182,212,.08);color:#06b6d4;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .2s;margin-top:14px}
+.run-btn:hover{background:rgba(6,182,212,.18);border-color:rgba(6,182,212,.7)}
+.run-btn:active{transform:scale(.98)}
+.tog{padding:3px 9px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;transition:all .2s}
+.tog.on{background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.5);color:#06b6d4}
+.tog.off{background:transparent;border:1px solid #334155;color:#64748b}
+.tab-btn{padding:5px 14px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.04em}
+.tab-btn.active{background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.5);color:#06b6d4}
+.tab-btn.inactive{background:transparent;border:1px solid #1e293b;color:#475569}
+.tab-btn.inactive:hover{border-color:#334155;color:#94a3b8}
+#timeline-view{flex:1;min-height:0;display:none;flex-direction:column;padding:14px;gap:10px;overflow:hidden}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="hdr">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="width:32px;height:32px;border-radius:8px;background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);display:flex;align-items:center;justify-content:center;font-size:17px">&#x1F6F0;&#xFE0F;</div>
+    <div>
+      <div style="font-size:14px;font-weight:700;letter-spacing:.04em">ABEP Mission Planner</div>
+      <div style="font-size:11px;color:#475569;margin-top:1px">Air-Breathing Electric Propulsion &nbsp;&middot;&nbsp; VLEO Survival Analysis</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px">
+    <button class="tab-btn active" id="tab-analysis" onclick="setTab('analysis')">Analysis</button>
+    <button class="tab-btn inactive" id="tab-timeline" onclick="setTab('timeline')">Timeline</button>
+  </div>
+  <div id="hdr-status" style="font-size:11px;color:#475569;text-align:right;min-width:200px"></div>
+</div>
+
+<!-- Main -->
+<div id="main">
+
+  <!-- Left: sliders -->
+  <div id="left">
+    <div class="lbl" style="margin-bottom:12px">Mission Parameters</div>
+    <div id="sliders"></div>
+    <div style="flex:1;min-height:8px"></div>
+    <button class="run-btn" id="run-btn" onclick="handleRun()">&#9654; Run Analysis</button>
+  </div>
+
+  <!-- Center: heatmap -->
+  <div id="center">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-shrink:0">
+      <div>
+        <div style="font-size:12px;font-weight:700">Survival Heatmap</div>
+        <div style="font-size:10px;color:#475569;margin-top:1px">T/D ratio &nbsp;&middot;&nbsp; F10.7 solar flux (columns) &times; Altitude km (rows)</div>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="tog on" id="t-quiet" onclick="setMode('quiet')">Quiet (Ap=4)</button>
+        <button class="tog off" id="t-storm" onclick="setMode('storm')">Storm (Ap=150)</button>
+      </div>
+    </div>
+    <div id="hmap-wrap" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden"></div>
+  </div>
+
+  <!-- Right: summary -->
+  <div id="right">
+    <div class="lbl" style="margin-bottom:10px">Mission Summary</div>
+    <div id="verdict-badge" style="display:inline-flex;padding:5px 11px;border-radius:6px;border:1px solid;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;width:fit-content"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="card">
+        <div style="font-size:10px;color:#475569;margin-bottom:3px">Failure Rate</div>
+        <div id="fail-pct" style="font-size:19px;font-weight:700;font-family:monospace"></div>
+        <div style="font-size:10px;color:#334155;margin-top:2px">of all conditions</div>
+      </div>
+      <div class="card">
+        <div style="font-size:10px;color:#475569;margin-bottom:3px">Safe Alt</div>
+        <div id="safe-alt" style="font-size:19px;font-weight:700;font-family:monospace;color:#06b6d4"></div>
+        <div style="font-size:10px;color:#334155;margin-top:2px">minimum viable</div>
+      </div>
+    </div>
+    <div id="bzone" style="border-radius:8px;border:1px solid rgba(234,179,8,.2);padding:9px;margin-bottom:10px;display:none">
+      <div style="font-size:10px;color:#eab308;font-weight:600;margin-bottom:3px">Boundary Zone</div>
+      <div id="bzone-val" style="font-size:14px;font-weight:700;font-family:monospace;color:#f1f5f9"></div>
+      <div style="font-size:10px;color:#475569;margin-top:2px">failure transition region</div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div class="lbl" style="margin-bottom:7px">Key Findings</div>
+      <div id="findings"></div>
+    </div>
+    <div>
+      <div class="lbl" style="margin-bottom:6px">Failure Rate by Altitude</div>
+      <div id="alt-bars"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom: storm chart -->
+<div id="btm">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;flex-shrink:0">
+    <div>
+      <div style="font-size:12px;font-weight:700">Storm Recovery Analysis</div>
+      <div id="storm-sub" style="font-size:10px;color:#475569;margin-top:1px"></div>
+    </div>
+    <div style="display:flex;gap:14px;font-size:10px">
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:#06b6d4"></div><span style="color:#64748b">Survivable</span></div>
+      <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:2px;background:#ef4444"></div><span style="color:#64748b">Deorbit risk</span></div>
+    </div>
+  </div>
+  <div id="storm-chart" style="flex:1;min-height:0;position:relative"></div>
+</div>
+
+<!-- Timeline view (hidden until tab switch) -->
+<div id="timeline-view">
+
+  <!-- Top bar: file load + metadata -->
+  <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+    <label style="cursor:pointer">
+      <input type="file" id="tl-file-input" accept=".json" style="display:none"
+             onchange="loadTimelineFile(this.files[0])">
+      <div style="padding:7px 14px;border-radius:7px;border:1px solid rgba(6,182,212,.4);
+                  background:rgba(6,182,212,.08);color:#06b6d4;font-size:11px;
+                  font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+                  cursor:pointer;transition:all .2s;user-select:none"
+           onmouseover="this.style.background='rgba(6,182,212,.18)'"
+           onmouseout="this.style.background='rgba(6,182,212,.08)'">
+        &#128193; Load timeline_data.json
+      </div>
+    </label>
+    <div id="tl-meta" style="font-size:11px;color:#475569">
+      Run <code style="color:#64748b;font-size:10px">python main.py --timeline</code>
+      then load the output file
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div style="font-size:12px;font-weight:700">Orbital Altitude Timeline</div>
+      <div style="display:flex;gap:10px;font-size:10px;align-items:center">
+        <div style="display:flex;align-items:center;gap:4px">
+          <div style="width:20px;height:3px;border-top:2px dashed rgba(239,68,68,.5)"></div>
+          <span style="color:#64748b">150 km deorbit</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <div style="width:10px;height:10px;border-left:2px solid rgba(249,115,22,.6)"></div>
+          <span style="color:#64748b">Storm event</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <div style="display:flex;align-items:center;gap:3px">
+            <div style="width:8px;height:8px;border-radius:50%;background:#22c55e"></div><span style="color:#475569">SAFE</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <div style="width:8px;height:8px;border-radius:50%;background:#eab308"></div><span style="color:#475569">MARG</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <div style="width:8px;height:8px;border-radius:50%;background:#ef4444"></div><span style="color:#475569">FAIL</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="tl-chart" style="flex:1;min-height:0;background:#0f172a;border-radius:8px;
+                               border:1px solid #1e293b;overflow:hidden;
+                               display:flex;align-items:center;justify-content:center">
+      <div id="tl-placeholder" style="color:#334155;font-size:12px;text-align:center">
+        No timeline data loaded<br>
+        <span style="font-size:10px;color:#1e293b">python main.py --timeline --output outputs</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event log -->
+  <div style="flex-shrink:0;max-height:110px;overflow-y:auto">
+    <div class="lbl" style="margin-bottom:5px">Events</div>
+    <div id="tl-events" style="font-size:10px;color:#475569">—</div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// DENSITY TABLE  (NRLMSISE-00 pre-computed, 630 points)
+// [alt_km, F10.7, Ap, rho_kg/m3]
+// ═══════════════════════════════════════════════════════════════════════════
+const DENSITY_TABLE=[[180,70,4,3.571936e-10],[180,70,15,3.776358e-10],[180,70,50,4.043090e-10],[180,70,100,4.276561e-10],[180,70,150,4.508727e-10],[180,70,200,4.748600e-10],[180,70,300,5.253304e-10],[180,100,4,4.039094e-10],[180,100,15,4.255796e-10],[180,100,50,4.538909e-10],[180,100,100,4.785496e-10],[180,100,150,5.030435e-10],[180,100,200,5.283545e-10],[180,100,300,5.816351e-10],[180,140,4,4.641734e-10],[180,140,15,4.876923e-10],[180,140,50,5.184566e-10],[180,140,100,5.450953e-10],[180,140,150,5.715161e-10],[180,140,200,5.988174e-10],[180,140,300,6.562994e-10],[180,180,4,5.246251e-10],[180,180,15,5.501082e-10],[180,180,50,5.834769e-10],[180,180,100,6.122213e-10],[180,180,150,6.406916e-10],[180,180,200,6.701084e-10],[180,180,300,7.320501e-10],[180,220,4,5.861303e-10],[180,220,15,6.136337e-10],[180,220,50,6.496806e-10],[180,220,100,6.805895e-10],[180,220,150,7.111663e-10],[180,220,200,7.427565e-10],[180,220,300,8.092774e-10],[180,250,4,6.331164e-10],[180,250,15,6.621476e-10],[180,250,50,7.002191e-10],[180,250,100,7.327630e-10],[180,250,150,7.649299e-10],[180,250,200,7.981602e-10],[180,250,300,8.681340e-10],[185,70,4,2.919339e-10],[185,70,15,3.095293e-10],[185,70,50,3.325485e-10],[185,70,100,3.527332e-10],[185,70,150,3.728454e-10],[185,70,200,3.936676e-10],[185,70,300,4.376077e-10],[185,100,4,3.352196e-10],[185,100,15,3.540197e-10],[185,100,50,3.786381e-10],[185,100,100,4.001084e-10],[185,100,150,4.214710e-10],[185,100,200,4.435857e-10],[185,100,300,4.902589e-10],[185,140,4,3.909127e-10],[185,140,15,4.114953e-10],[185,140,50,4.384734e-10],[185,140,100,4.618558e-10],[185,140,150,4.850799e-10],[185,140,200,5.091152e-10],[185,140,300,5.598357e-10],[185,180,4,4.467707e-10],[185,180,15,4.692367e-10],[185,180,50,4.987085e-10],[185,180,100,5.241145e-10],[185,180,150,5.493096e-10],[185,180,200,5.753783e-10],[185,180,300,6.303819e-10],[185,220,4,5.036816e-10],[185,220,15,5.280827e-10],[185,220,50,5.601173e-10],[185,220,100,5.876018e-10],[185,220,150,6.148211e-10],[185,220,200,6.429780e-10],[185,220,300,7.023795e-10],[185,250,4,5.472342e-10],[185,250,15,5.730997e-10],[185,250,50,6.070737e-10],[185,250,100,6.361294e-10],[185,250,150,6.648781e-10],[185,250,200,6.946125e-10],[185,250,300,7.573346e-10],[190,70,4,2.402812e-10],[190,70,15,2.554893e-10],[190,70,50,2.754378e-10],[190,70,100,2.929608e-10],[190,70,150,3.104557e-10],[190,70,200,3.286049e-10],[190,70,300,3.670167e-10],[190,100,4,2.802681e-10],[190,100,15,2.966566e-10],[190,100,50,3.181658e-10],[190,100,100,3.369480e-10],[190,100,150,3.556668e-10],[190,100,200,3.750782e-10],[190,100,300,4.161501e-10],[190,140,4,3.316906e-10],[190,140,15,3.497955e-10],[190,140,50,3.735729e-10],[190,140,100,3.941995e-10],[190,140,150,4.147144e-10],[190,140,200,4.359776e-10],[190,140,300,4.809466e-10],[190,180,4,3.833089e-10],[190,180,15,4.032171e-10],[190,180,50,4.293795e-10],[190,180,100,4.519480e-10],[190,180,150,4.743556e-10],[190,180,200,4.975708e-10],[190,180,300,5.466492e-10],[190,220,4,4.359937e-10],[190,220,15,4.577522e-10],[190,220,50,4.863636e-10],[190,220,100,5.109243e-10],[190,220,150,5.352735e-10],[190,220,200,5.604918e-10],[190,220,300,6.137878e-10],[190,250,4,4.763868e-10],[190,250,15,4.995461e-10],[190,250,50,5.300119e-10],[190,250,100,5.560792e-10],[190,250,150,5.818962e-10],[190,250,200,6.086285e-10],[190,250,300,6.651117e-10],[195,70,4,1.990080e-10],[195,70,15,2.122010e-10],[195,70,50,2.295522e-10],[195,70,100,2.448206e-10],[195,70,150,2.600947e-10],[195,70,200,2.759723e-10],[195,70,300,3.096746e-10],[195,100,4,2.358551e-10],[195,100,15,2.502024e-10],[195,100,50,2.690749e-10],[195,100,100,2.855750e-10],[195,100,150,3.020458e-10],[195,100,200,3.191553e-10],[195,100,300,3.554466e-10],[195,140,4,2.833029e-10],[195,140,15,2.993013e-10],[195,140,50,3.203524e-10],[195,140,100,3.386296e-10],[195,140,150,3.568318e-10],[195,140,200,3.757253e-10],[195,140,300,4.157676e-10],[195,180,4,3.310149e-10],[195,180,15,3.487382e-10],[195,180,50,3.720690e-10],[195,180,100,3.922077e-10],[195,180,150,4.122255e-10],[195,180,200,4.329912e-10],[195,180,300,4.769738e-10],[195,220,4,3.798167e-10],[195,220,15,3.993074e-10],[195,220,50,4.249764e-10],[195,220,100,4.470224e-10],[195,220,150,4.689005e-10],[195,220,200,4.915856e-10],[195,220,300,5.396094e-10],[195,250,4,4.173055e-10],[195,250,15,4.381344e-10],[195,250,50,4.655746e-10],[195,250,100,4.890632e-10],[195,250,150,5.123480e-10],[195,250,200,5.364845e-10],[195,250,300,5.875639e-10],[200,70,4,1.657515e-10],[200,70,15,1.772338e-10],[200,70,50,1.923753e-10],[200,70,100,2.057229e-10],[200,70,150,2.191021e-10],[200,70,200,2.330381e-10],[200,70,300,2.627056e-10],[200,100,4,1.996340e-10],[200,100,15,2.122426e-10],[200,100,50,2.288646e-10],[200,100,100,2.434148e-10],[200,100,150,2.579622e-10],[200,100,200,2.730991e-10],[200,100,300,3.052849e-10],[200,140,4,2.433931e-10],[200,140,15,2.575881e-10],[200,140,50,2.763013e-10],[200,140,100,2.925621e-10],[200,140,150,3.087771e-10],[200,140,200,3.256315e-10],[200,140,300,3.614262e-10],[200,180,4,2.875094e-10],[200,180,15,3.033531e-10],[200,180,50,3.242442e-10],[200,180,100,3.422882e-10],[200,180,150,3.602434e-10],[200,180,200,3.788926e-10],[200,180,300,4.184638e-10],[200,220,4,3.327441e-10],[200,220,15,3.502750e-10],[200,220,50,3.733977e-10],[200,220,100,3.932663e-10],[200,220,150,4.130027e-10],[200,220,200,4.334899e-10],[200,220,300,4.769316e-10],[200,250,4,3.675634e-10],[200,250,15,3.863718e-10],[200,250,50,4.111852e-10],[200,250,100,4.324341e-10],[200,250,150,4.535175e-10],[200,250,200,4.753948e-10],[200,250,300,5.217643e-10],[205,70,4,1.387548e-10],[205,70,15,1.487774e-10],[205,70,50,1.620294e-10],[205,70,100,1.737324e-10],[205,70,150,1.854864e-10],[205,70,200,1.977544e-10],[205,70,300,2.239474e-10],[205,100,4,1.698567e-10],[205,100,15,1.809752e-10],[205,100,50,1.956651e-10],[205,100,100,2.085396e-10],[205,100,150,2.214318e-10],[205,100,200,2.348688e-10],[205,100,300,2.635091e-10],[205,140,4,2.101997e-10],[205,140,15,2.228410e-10],[205,140,50,2.395368e-10],[205,140,100,2.540564e-10],[205,140,150,2.685533e-10],[205,140,200,2.836427e-10],[205,140,300,3.157536e-10],[205,180,4,2.510068e-10],[205,180,15,2.652234e-10],[205,180,50,2.839992e-10],[205,180,100,3.002260e-10],[205,180,150,3.163903e-10],[205,180,200,3.331994e-10],[205,180,300,3.689292e-10],[205,220,4,2.929638e-10],[205,220,15,3.087905e-10],[205,220,50,3.296956e-10],[205,220,100,3.476674e-10],[205,220,150,3.655363e-10],[205,220,200,3.841050e-10],[205,220,300,4.235408e-10],[205,250,4,3.253281e-10],[205,250,15,3.423739e-10],[205,250,50,3.648927e-10],[205,250,100,3.841844e-10],[205,250,150,4.033427e-10],[205,250,200,4.232423e-10],[205,250,300,4.654825e-10],[210,70,4,1.166937e-10],[210,70,15,1.254653e-10],[210,70,50,1.370941e-10],[210,70,100,1.473823e-10],[210,70,150,1.577362e-10],[210,70,200,1.685647e-10],[210,70,300,1.917519e-10],[210,100,4,1.452014e-10],[210,100,15,1.550363e-10],[210,100,50,1.680585e-10],[210,100,100,1.794854e-10],[210,100,150,1.909459e-10],[210,100,200,2.029102e-10],[210,100,300,2.284725e-10],[210,140,4,1.823856e-10],[210,140,15,1.936809e-10],[210,140,50,2.086258e-10],[210,140,100,2.216335e-10],[210,140,150,2.346367e-10],[210,140,200,2.481898e-10],[210,140,300,2.770884e-10],[210,180,4,2.201472e-10],[210,180,15,2.329470e-10],[210,180,50,2.498782e-10],[210,180,100,2.645196e-10],[210,180,150,2.791198e-10],[210,180,200,2.943202e-10],[210,180,300,3.266861e-10],[210,220,4,2.590904e-10],[210,220,15,2.734264e-10],[210,220,50,2.923893e-10],[210,220,100,3.086991e-10],[210,220,150,3.249305e-10],[210,220,200,3.418150e-10],[210,220,300,3.777294e-10],[210,250,4,2.891953e-10],[210,250,15,3.046946e-10],[210,250,50,3.251974e-10],[210,250,100,3.427693e-10],[210,250,150,3.602344e-10],[210,250,200,3.783931e-10],[210,250,300,4.169934e-10],[215,70,4,9.855780e-11],[215,70,15,1.062527e-10],[215,70,50,1.164815e-10],[215,70,100,1.255479e-10],[215,70,150,1.346904e-10],[215,70,200,1.442715e-10],[215,70,300,1.648476e-10],[215,100,4,1.246558e-10],[215,100,15,1.333797e-10],[215,100,50,1.449556e-10],[215,100,100,1.551259e-10],[215,100,150,1.653420e-10],[215,100,200,1.760245e-10],[215,100,300,1.989024e-10],[215,140,4,1.589229e-10],[215,140,15,1.690459e-10],[215,140,50,1.824634e-10],[215,140,100,1.941513e-10],[215,140,150,2.058495e-10],[215,140,200,2.180586e-10],[215,140,300,2.441420e-10],[215,180,4,1.938810e-10],[215,180,15,2.054404e-10],[215,180,50,2.207545e-10],[215,180,100,2.340054e-10],[215,180,150,2.472326e-10],[215,180,200,2.610193e-10],[215,180,300,2.904244e-10],[215,220,4,2.300506e-10],[215,220,15,2.430758e-10],[215,220,50,2.603286e-10],[215,220,100,2.751745e-10],[215,220,150,2.899623e-10],[215,220,200,3.053609e-10],[215,220,300,3.381638e-10],[215,250,4,2.580739e-10],[215,250,15,2.722090e-10],[215,250,50,2.909315e-10],[215,250,100,3.069842e-10],[215,250,150,3.229526e-10],[215,250,200,3.395709e-10],[215,250,300,3.749463e-10],[220,70,4,8.356746e-11],[220,70,15,9.033262e-11],[220,70,50,9.934948e-11],[220,70,100,1.073567e-10],[220,70,150,1.154474e-10],[220,70,200,1.239435e-10],[220,70,300,1.422429e-10],[220,100,4,1.074357e-10],[220,100,15,1.151936e-10],[220,100,50,1.255097e-10],[220,100,100,1.345847e-10],[220,100,150,1.437145e-10],[220,100,200,1.532767e-10],[220,100,300,1.738031e-10],[220,140,4,1.390114e-10],[220,140,15,1.481085e-10],[220,140,50,1.601873e-10],[220,140,100,1.707179e-10],[220,140,150,1.812705e-10],[220,140,200,1.922983e-10],[220,140,300,2.159032e-10],[220,180,4,1.713877e-10],[220,180,15,1.818560e-10],[220,180,50,1.957453e-10],[220,180,100,2.077709e-10],[220,180,150,2.197870e-10],[220,180,200,2.323255e-10],[220,180,300,2.591123e-10],[220,220,4,2.050027e-10],[220,220,15,2.168695e-10],[220,220,50,2.326090e-10],[220,220,100,2.461594e-10],[220,220,150,2.596685e-10],[220,220,200,2.737498e-10],[220,220,300,3.037903e-10],[220,250,4,2.311062e-10],[220,250,15,2.440322e-10],[220,250,50,2.611747e-10],[220,250,100,2.758789e-10],[220,250,150,2.905177e-10],[220,250,200,3.057667e-10],[220,250,300,3.382715e-10],[225,70,4,7.111551e-11],[225,70,15,7.707510e-11],[225,70,50,8.503941e-11],[225,70,100,9.212546e-11],[225,70,150,9.929999e-11],[225,70,200,1.068492e-10],[225,70,300,1.231567e-10],[225,100,4,9.292679e-11],[225,100,15,9.984167e-11],[225,100,50,1.090562e-10],[225,100,100,1.171725e-10],[225,100,150,1.253505e-10],[225,100,200,1.339294e-10],[225,100,300,1.523881e-10],[225,140,4,1.220214e-10],[225,140,15,1.302169e-10],[225,140,50,1.411173e-10],[225,140,100,1.506286e-10],[225,140,150,1.601712e-10],[225,140,200,1.701564e-10],[225,140,300,1.915699e-10],[225,180,4,1.520191e-10],[225,180,15,1.615231e-10],[225,180,50,1.741518e-10],[225,180,100,1.850926e-10],[225,180,150,1.960357e-10],[225,180,200,2.074672e-10],[225,180,300,2.319286e-10],[225,220,4,1.832791e-10],[225,220,15,1.941174e-10],[225,220,50,2.085119e-10],[225,220,100,2.209104e-10],[225,220,150,2.332820e-10],[225,220,200,2.461901e-10],[225,220,300,2.737676e-10],[225,250,4,2.076101e-10],[225,250,15,2.194594e-10],[225,250,50,2.351934e-10],[225,250,100,2.486953e-10],[225,250,150,2.621480e-10],[225,250,200,2.761742e-10],[225,250,300,3.061125e-10],[230,70,4,6.072475e-11],[230,70,15,6.598439e-11],[230,70,50,7.303190e-11],[230,70,100,7.931449e-11],[230,70,150,8.568844e-11],[230,70,200,9.240886e-11],[230,70,300,1.069683e-10],[230,100,4,8.064362e-11],[230,100,15,8.682011e-11],[230,100,50,9.506788e-11],[230,100,100,1.023422e-10],[230,100,150,1.096830e-10],[230,100,200,1.173961e-10],[230,100,300,1.340300e-10],[230,140,4,1.074524e-10],[230,140,15,1.148524e-10],[230,140,50,1.247114e-10],[230,140,100,1.333215e-10],[230,140,150,1.419701e-10],[230,140,200,1.510314e-10],[230,140,300,1.704999e-10],[230,180,4,1.352577e-10],[230,180,15,1.439061e-10],[230,180,50,1.554146e-10],[230,180,100,1.653913e-10],[230,180,150,1.753800e-10],[230,180,200,1.858257e-10],[230,180,300,2.082134e-10],[230,220,4,1.643446e-10],[230,220,15,1.742662e-10],[230,220,50,1.874602e-10],[230,220,100,1.988305e-10],[230,220,150,2.101858e-10],[230,220,200,2.220449e-10],[230,220,300,2.474172e-10],[230,250,4,1.870377e-10],[230,250,15,1.979243e-10],[230,250,50,2.123975e-10],[230,250,100,2.248229e-10],[230,250,150,2.372129e-10],[230,250,200,2.501427e-10],[230,250,300,2.777772e-10],[235,70,4,5.201726e-11],[235,70,15,5.666712e-11],[235,70,50,6.291396e-11],[235,70,100,6.849383e-11],[235,70,150,7.416636e-11],[235,70,200,8.015930e-11],[235,70,300,9.318049e-11],[235,100,4,7.019901e-11],[235,100,15,7.572666e-11],[235,100,50,8.312329e-11],[235,100,100,8.965565e-11],[235,100,150,9.625788e-11],[235,100,200,1.032058e-10],[235,100,300,1.182241e-10],[235,140,4,9.490300e-11],[235,140,15,1.015986e-10],[235,140,50,1.105338e-10],[235,140,100,1.183442e-10],[235,140,150,1.261988e-10],[235,140,200,1.344386e-10],[235,140,300,1.521745e-10],[235,180,4,1.206866e-10],[235,180,15,1.285730e-10],[235,180,50,1.390824e-10],[235,180,100,1.481989e-10],[235,180,150,1.573353e-10],[235,180,200,1.669001e-10],[235,180,300,1.874316e-10],[235,220,4,1.477666e-10],[235,220,15,1.568678e-10],[235,220,50,1.689863e-10],[235,220,100,1.794351e-10],[235,220,150,1.898790e-10],[235,220,200,2.007967e-10],[235,220,300,2.241872e-10],[235,250,4,1.689445e-10],[235,250,15,1.789670e-10],[235,250,50,1.923073e-10],[235,250,100,2.037653e-10],[235,250,150,2.151996e-10],[235,250,200,2.271426e-10],[235,250,300,2.527011e-10],[240,70,4,4.469155e-11],[240,70,15,4.880893e-11],[240,70,50,5.435482e-11],[240,70,100,5.931858e-11],[240,70,150,6.437502e-11],[240,70,200,6.972782e-11],[240,70,300,8.139184e-11],[240,100,4,6.128177e-11],[240,100,15,6.623760e-11],[240,100,50,7.288264e-11],[240,100,100,7.875925e-11],[240,100,150,8.470784e-11],[240,100,200,9.097771e-11],[240,100,300,1.045613e-10],[240,140,4,8.404851e-11],[240,140,15,9.011817e-11],[240,140,50,9.823145e-11],[240,140,100,1.053298e-10],[240,140,150,1.124768e-10],[240,140,200,1.199835e-10],[240,140,300,1.361711e-10],[240,180,4,1.079671e-10],[240,180,15,1.151723e-10],[240,180,50,1.247875e-10],[240,180,100,1.331340e-10],[240,180,150,1.415068e-10],[240,180,200,1.502814e-10],[240,180,300,1.691460e-10],[240,220,4,1.331921e-10],[240,220,15,1.415566e-10],[240,220,50,1.527080e-10],[240,220,100,1.623281e-10],[240,220,150,1.719519e-10],[240,220,200,1.820216e-10],[240,220,300,2.036249e-10],[240,250,4,1.529671e-10],[240,250,15,1.622113e-10],[240,250,50,1.745298e-10],[240,250,100,1.851153e-10],[240,250,150,1.956872e-10],[240,250,200,2.067389e-10],[240,250,300,2.304202e-10],[245,70,4,3.850559e-11],[245,70,15,4.215696e-11],[245,70,50,4.708786e-11],[245,70,100,5.151022e-11],[245,70,150,5.602430e-11],[245,70,200,6.081251e-11],[245,70,300,7.127636e-11],[245,100,4,5.364002e-11],[245,100,15,5.809053e-11],[245,100,50,6.407009e-11],[245,100,100,6.936556e-11],[245,100,150,7.473410e-11],[245,100,200,8.040142e-11],[245,100,300,9.270737e-11],[245,140,4,7.462429e-11],[245,140,15,8.013615e-11],[245,140,50,8.751576e-11],[245,140,100,9.397827e-11],[245,140,150,1.004927e-10],[245,140,200,1.073435e-10],[245,140,300,1.221431e-10],[245,180,4,9.682148e-11],[245,180,15,1.034160e-10],[245,180,50,1.122283e-10],[245,180,100,1.198832e-10],[245,180,150,1.275697e-10],[245,180,200,1.356334e-10],[245,180,300,1.529962e-10],[245,220,4,1.203307e-10],[245,220,15,1.280314e-10],[245,220,50,1.383105e-10],[245,220,100,1.471830e-10],[245,220,150,1.560663e-10],[245,220,200,1.653699e-10],[245,220,300,1.853564e-10],[245,250,4,1.388057e-10],[245,250,15,1.473465e-10],[245,250,50,1.587406e-10],[245,250,100,1.685366e-10],[245,250,150,1.783276e-10],[245,250,200,1.885718e-10],[245,250,300,2.105503e-10],[250,70,4,3.326391e-11],[250,70,15,3.650663e-11],[250,70,50,4.089685e-11],[250,70,100,4.484247e-11],[250,70,150,4.887809e-11],[250,70,200,5.316729e-11],[250,70,300,6.256752e-11],[250,100,4,4.706848e-11],[250,100,15,5.107134e-11],[250,100,50,5.646021e-11],[250,100,100,6.123936e-11],[250,100,150,6.609187e-11],[250,100,200,7.122237e-11],[250,100,300,8.238771e-11],[250,140,4,6.641315e-11],[250,140,15,7.142652e-11],[250,140,50,7.814943e-11],[250,140,100,8.404253e-11],[250,140,150,8.998987e-11],[250,140,200,9.625198e-11],[250,140,300,1.098041e-10],[250,180,4,8.702091e-11],[250,180,15,9.306621e-11],[250,180,50,1.011556e-10],[250,180,100,1.081876e-10],[250,180,150,1.152553e-10],[250,180,200,1.226776e-10],[250,180,300,1.386834e-10],[250,220,4,1.089419e-10],[250,220,15,1.160428e-10],[250,220,50,1.255326e-10],[250,220,100,1.337286e-10],[250,220,150,1.419414e-10],[250,220,200,1.505505e-10],[250,220,300,1.690700e-10],[250,250,4,1.262113e-10],[250,250,15,1.341144e-10],[250,250,50,1.446697e-10],[250,250,100,1.537492e-10],[250,250,150,1.628310e-10],[250,250,200,1.723413e-10],[250,250,300,1.927704e-10]];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHYSICS
+// ═══════════════════════════════════════════════════════════════════════════
+const GM=3.986004418e14, R_E=6371000, G0=9.80665, SOLAR_K=1361;
+const F107_GRID=[70,100,140,180,220,250];
+const ALT_GRID=[180,185,190,195,200,205,210,215,220,225,230,235,240,245,250];
+const AP_GRID=[4,15,50,100,150,200,300];
+
+const rhoLookup={};
+for(const [alt,f107,ap,rho] of DENSITY_TABLE){
+  if(!rhoLookup[alt])rhoLookup[alt]={};
+  if(!rhoLookup[alt][f107])rhoLookup[alt][f107]={};
+  rhoLookup[alt][f107][ap]=rho;
+}
+
+function snap(val,grid){return grid.reduce((a,b)=>Math.abs(b-val)<Math.abs(a-val)?b:a);}
+function getRho(alt,f107,ap){
+  const a=rhoLookup[snap(alt,ALT_GRID)];
+  const b=a&&a[snap(f107,F107_GRID)];
+  return(b&&b[snap(ap,AP_GRID)])||2e-10;
+}
+function vOrb(altKm){return Math.sqrt(GM/(R_E+altKm*1000));}
+function physics(rho,altKm,p){
+  const v=vOrb(altKm);
+  const Fd=0.5*rho*v*v*p.Cd*p.front;
+  const mdot=rho*v*p.intake*p.etaIn;
+  const Fp=mdot*p.isp*G0*p.etaIon;
+  const Pa=Math.max(p.panels*SOLAR_K*p.etaPanel*(1-p.eclipse)-p.house,0);
+  const Fw=Pa*p.tp*1e-6;
+  const Fe=Math.min(Fp,Fw);
+  return{ratio:Fd>0?Fe/Fd:99,Fd_mN:Fd*1e3,Fe_mN:Fe*1e3,lim:Fp<=Fw?'PROP':'PWR'};
+}
+function rColor(r){
+  if(r>=1.5)return'#22c55e';
+  if(r>=1.2)return'#84cc16';
+  if(r>=1.0)return'#eab308';
+  if(r>=0.6)return'#f97316';
+  return'#ef4444';
+}
+function classify(r){return r>1.5?'SAFE':r>=1.2?'ADEQUATE':r>=1.0?'MARGINAL':'FAILURE';}
+
+function runAnalysis(altTarget,isp,etaIn,panels){
+  const p={Cd:2.2,front:1.2,intake:1.0,etaIn,isp,tp:25,panels,etaPanel:0.30,eclipse:0.35,house:50,etaIon:0.70};
+  const heatmap=[];
+  for(const alt of ALT_GRID)for(const f107 of F107_GRID){
+    const q=physics(getRho(alt,f107,4),alt,p);
+    const s=physics(getRho(alt,f107,150),alt,p);
+    heatmap.push({alt,f107,rQ:q.ratio,rS:s.ratio,limQ:q.lim,limS:s.lim});
+  }
+  let total=0,fail=0,marg=0;
+  const altFR={};
+  for(const alt of ALT_GRID){
+    let af=0,at=0;
+    for(const f107 of F107_GRID)for(const ap of AP_GRID){
+      const{ratio}=physics(getRho(alt,f107,ap),alt,p);
+      total++;at++;
+      if(ratio<1.0){fail++;af++;}else if(ratio<1.2)marg++;
+    }
+    altFR[alt]=af/at;
+  }
+  let recAlt=ALT_GRID[ALT_GRID.length-1];
+  for(const alt of [...ALT_GRID].sort((a,b)=>a-b))if(altFR[alt]<0.30){recAlt=alt;break;}
+  let bLo=null,bHi=null;
+  for(const alt of ALT_GRID){
+    if(altFR[alt]>=0.80&&(bLo===null||alt>bLo))bLo=alt;
+    if(altFR[alt]<=0.20&&(bHi===null||alt<bHi))bHi=alt;
+  }
+  const v=vOrb(altTarget),vx=isp*G0;
+  const Pa=Math.max(panels*SOLAR_K*0.30*0.65-50,0);
+  const rhoCross=(Pa*25e-6)/(v*1.0*etaIn*vx*0.70);
+  const propR=(1.0*etaIn*vx*0.70)/(0.5*v*2.2*1.2);
+  const qT=physics(getRho(altTarget,140,4),altTarget,p);
+  const sT=physics(getRho(altTarget,250,300),altTarget,p);
+  const storms=[
+    {name:'Minor (Kp5)',ap:50,dur:6,f107:140},
+    {name:'Moderate (Kp6)',ap:100,dur:12,f107:140},
+    {name:'Strong (Kp7)',ap:150,dur:24,f107:180},
+    {name:'Severe (Kp8)',ap:200,dur:24,f107:250},
+    {name:'Extreme (Kp9)',ap:300,dur:48,f107:250},
+  ].map(s=>{
+    const ph=physics(getRho(altTarget,s.f107,s.ap),altTarget,p);
+    const a=R_E+altTarget*1000;
+    const nOrb=Math.sqrt(GM/(a*a*a));
+    const Fnet=Math.max(ph.Fd_mN-ph.Fe_mN,0)/1000;
+    const dhdt=-2*Fnet/(200*nOrb);
+    const loss=Math.max(-dhdt*s.dur*3600/1000,0);
+    return{name:s.name,altLoss:+loss.toFixed(2),ratio:+ph.ratio.toFixed(3),survived:loss<altTarget-150};
+  });
+  const fdr=fail/total;
+  const findings=[
+    'Prop-limited T/D ratio: '+propR.toFixed(3)+' (density-independent)',
+    'Crossover density @ '+altTarget+' km: '+rhoCross.toExponential(2)+' kg/m\u00B3',
+    qT.ratio>=1.0&&sT.ratio<1.0
+      ?'Quiet: '+classify(qT.ratio)+' (T/D '+qT.ratio.toFixed(2)+') \u2014 Solar max storm: FAILURE ('+sT.ratio.toFixed(2)+')'
+      :qT.ratio<1.0
+      ?'Quiet conditions fail at '+altTarget+' km \u2014 raise to '+recAlt+' km'
+      :'Target viable in most conditions. Storm T/D: '+sT.ratio.toFixed(2)+' ('+classify(sT.ratio)+')',
+    bLo&&bHi?'Boundary zone: '+bLo+'\u2013'+bHi+' km transition':'Boundary: '+(bLo||bHi||'beyond grid')+' km',
+  ];
+  return{heatmap,altFR,failRate:fdr,verdict:fdr<0.20?'FEASIBLE':fdr<0.50?'FEASIBLE WITH CAVEATS':'NOT FEASIBLE',recAlt,findings,storms,bLo,bHi};
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+var S={alt:210,isp:5000,eta:0.40,panels:4.0,mode:'quiet',res:null};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SLIDERS
+// ═══════════════════════════════════════════════════════════════════════════
+var SLIDERS=[
+  {id:'alt',  label:'Target Altitude',  unit:' km', min:180,  max:250,  step:5,    fmt:function(v){return v;}},
+  {id:'isp',  label:'Specific Impulse', unit:' s',  min:3000, max:6000, step:100,  fmt:function(v){return v.toLocaleString();}},
+  {id:'eta',  label:'Intake Efficiency',unit:'',    min:0.30, max:0.50, step:0.01, fmt:function(v){return v.toFixed(2);}},
+  {id:'panels',label:'Panel Area',      unit:' m\u00B2',min:3.0,max:6.0,step:0.5, fmt:function(v){return v.toFixed(1);}},
+];
+
+function buildSliders(){
+  var el=document.getElementById('sliders');
+  el.innerHTML=SLIDERS.map(function(s){
+    var pct=((S[s.id]-s.min)/(s.max-s.min)*100).toFixed(1);
+    return '<div style="margin-bottom:15px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">'+
+        '<span style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em">'+s.label+'</span>'+
+        '<span id="val-'+s.id+'" style="font-size:13px;font-family:monospace;font-weight:700;color:#06b6d4">'+s.fmt(S[s.id])+s.unit+'</span>'+
+      '</div>'+
+      '<input type="range" id="rng-'+s.id+'" min="'+s.min+'" max="'+s.max+'" step="'+s.step+'" value="'+S[s.id]+'"'+
+        ' style="background:linear-gradient(to right,#06b6d4 '+pct+'%,#1e293b '+pct+'%)">'+
+      '<div style="display:flex;justify-content:space-between;font-size:10px;color:#334155;margin-top:2px">'+
+        '<span>'+s.min+s.unit+'</span><span>'+s.max+s.unit+'</span></div>'+
+    '</div>';
+  }).join('');
+  SLIDERS.forEach(function(s){
+    document.getElementById('rng-'+s.id).addEventListener('input',function(){
+      S[s.id]=+this.value;
+      var pct=((S[s.id]-s.min)/(s.max-s.min)*100).toFixed(1);
+      this.style.background='linear-gradient(to right,#06b6d4 '+pct+'%,#1e293b '+pct+'%)';
+      document.getElementById('val-'+s.id).textContent=s.fmt(S[s.id])+s.unit;
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════════════════
+function renderHeatmap(){
+  var heatmap=S.res.heatmap;
+  var m={};
+  for(var i=0;i<heatmap.length;i++){var c=heatmap[i];if(!m[c.alt])m[c.alt]={};m[c.alt][c.f107]=c;}
+  var rows=[].concat(ALT_GRID).sort(function(a,b){return b-a;});
+  var html='';
+  // F10.7 header
+  html+='<div style="display:flex;margin-bottom:3px;flex-shrink:0">';
+  html+='<div style="width:36px;flex-shrink:0;font-size:10px;color:#475569;text-align:right;padding-right:6px">km \u2193</div>';
+  for(var fi=0;fi<F107_GRID.length;fi++)
+    html+='<div style="flex:1;text-align:center;font-size:10px;color:#475569">'+F107_GRID[fi]+'</div>';
+  html+='</div>';
+  // Rows
+  html+='<div style="flex:1;display:flex;flex-direction:column;gap:2px;overflow:hidden">';
+  for(var ri=0;ri<rows.length;ri++){
+    var a=rows[ri];
+    var isTarget=a===S.alt;
+    var cells=m[a]||{};
+    html+='<div style="display:flex;gap:2px;flex:1;align-items:stretch">';
+    html+='<div style="width:36px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:11px;font-family:monospace;'+(isTarget?'color:#06b6d4;font-weight:700':'color:#475569')+'">'+a+'</div>';
+    for(var fi2=0;fi2<F107_GRID.length;fi2++){
+      var f=F107_GRID[fi2];
+      var c=cells[f];
+      if(!c){html+='<div style="flex:1"></div>';continue;}
+      var r=S.mode==='quiet'?c.rQ:c.rS;
+      var lim=S.mode==='quiet'?c.limQ:c.limS;
+      var ispl=lim==='PROP';
+      var bg=rColor(r);
+      var disp=r>=10?'\u2014':r.toFixed(2);
+      html+='<div style="position:relative;flex:1;display:flex;align-items:center;justify-content:center;background:'+bg+'bb;border-radius:3px;font-size:10px;font-family:monospace;font-weight:700;color:#fff;'+
+        (isTarget?'outline:2px solid rgba(255,255,255,.8);outline-offset:-1px;':'')+
+        (ispl?'border:1px dotted rgba(255,255,255,.4);':'border:1px solid transparent;')+
+        '" title="Alt='+a+'km F10.7='+f+' T/D='+r.toFixed(3)+' ['+(ispl?'propellant-limited':'power-limited')+']">'+disp+
+        (ispl?'<span style="position:absolute;bottom:1px;right:2px;font-size:6px;font-weight:400;color:rgba(255,255,255,.55);letter-spacing:0;font-family:sans-serif">PL</span>':'')+
+        '</div>';
+    }
+    html+='</div>';
+  }
+  html+='</div>';
+  // Legend
+  html+='<div style="display:flex;gap:10px;align-items:center;margin-top:5px;flex-shrink:0;flex-wrap:wrap">';
+  html+='<span style="font-size:10px;color:#334155">T/D ratio:</span>';
+  var legend=[['&ge;1.5 SAFE','#22c55e'],['1.2&ndash;1.5 OK','#84cc16'],['1.0&ndash;1.2 MARG','#eab308'],['0.6&ndash;1.0','#f97316'],['&lt;0.6 FAIL','#ef4444']];
+  for(var li=0;li<legend.length;li++)
+    html+='<div style="display:flex;align-items:center;gap:3px"><div style="width:10px;height:10px;border-radius:2px;background:'+legend[li][1]+'"></div><span style="font-size:10px;color:#475569">'+legend[li][0]+'</span></div>';
+  html+='</div>';
+  document.getElementById('hmap-wrap').innerHTML=html;
+}
+
+function renderRight(){
+  var res=S.res;
+  // Verdict
+  var vb=document.getElementById('verdict-badge');
+  vb.textContent=res.verdict;
+  if(res.verdict==='FEASIBLE'){vb.style.cssText='display:inline-flex;padding:5px 11px;border-radius:6px;border:1px solid rgba(34,197,94,.5);background:rgba(34,197,94,.1);color:#22c55e;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;width:fit-content';}
+  else if(res.verdict==='FEASIBLE WITH CAVEATS'){vb.style.cssText='display:inline-flex;padding:5px 11px;border-radius:6px;border:1px solid rgba(234,179,8,.5);background:rgba(234,179,8,.1);color:#eab308;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;width:fit-content';}
+  else{vb.style.cssText='display:inline-flex;padding:5px 11px;border-radius:6px;border:1px solid rgba(239,68,68,.5);background:rgba(239,68,68,.1);color:#ef4444;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;width:fit-content';}
+  // Stats
+  var fr=res.failRate;
+  var fc=fr<0.2?'#22c55e':fr<0.5?'#eab308':'#ef4444';
+  var fp=document.getElementById('fail-pct');
+  fp.style.color=fc; fp.textContent=(fr*100).toFixed(1)+'%';
+  document.getElementById('safe-alt').textContent=res.recAlt+' km';
+  // Boundary
+  var bz=document.getElementById('bzone');
+  if(res.bLo&&res.bHi){
+    bz.style.display='block';
+    document.getElementById('bzone-val').textContent=res.bLo+' \u2013 '+res.bHi+' km';
+  } else bz.style.display='none';
+  // Findings
+  document.getElementById('findings').innerHTML=res.findings.map(function(f){
+    return '<div style="display:flex;gap:8px;margin-bottom:7px"><span style="color:#06b6d4;flex-shrink:0;font-size:8px;margin-top:2px">\u25C6</span><span style="font-size:11px;color:#cbd5e1;line-height:1.5">'+f+'</span></div>';
+  }).join('');
+  // Alt bars
+  var rows=[].concat(ALT_GRID).sort(function(a,b){return b-a;});
+  document.getElementById('alt-bars').innerHTML=rows.map(function(a){
+    var fr2=res.altFR[a]||0;
+    var c2=fr2<0.2?'#22c55e':fr2<0.5?'#eab308':'#ef4444';
+    var active=a===S.alt;
+    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;opacity:'+(active?1:0.6)+'">'
+      +'<div style="width:28px;text-align:right;font-size:10px;font-family:monospace;color:'+(active?'#06b6d4':'#475569')+';font-weight:'+(active?700:400)+';flex-shrink:0">'+a+'</div>'
+      +'<div style="flex:1;height:10px;background:#1e293b;border-radius:5px;overflow:hidden"><div style="height:100%;border-radius:5px;width:'+(fr2*100).toFixed(1)+'%;background:'+c2+'"></div></div>'
+      +'<div style="width:28px;text-align:right;font-size:10px;font-family:monospace;flex-shrink:0;color:'+c2+'">'+(fr2*100).toFixed(0)+'%</div>'
+      +'</div>';
+  }).join('');
+}
+
+function renderStormChart(){
+  var storms=S.res.storms;
+  var el=document.getElementById('storm-chart');
+  var W=el.offsetWidth||560, H=el.offsetHeight||110;
+  if(W<10||H<10)return;
+  var maxLoss=0;
+  for(var i=0;i<storms.length;i++)if(storms[i].altLoss>maxLoss)maxLoss=storms[i].altLoss;
+  if(maxLoss<0.01)maxLoss=1;
+  var pad={l:38,r:8,t:14,b:30};
+  var cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  var slotW=cW/storms.length;
+  var bw=Math.min(slotW*0.6,52);
+  var svg='<svg width="'+W+'" height="'+H+'" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">';
+  // Grid lines & Y labels
+  for(var gi=0;gi<=4;gi++){
+    var yv=maxLoss*gi/4;
+    var cy=pad.t+cH*(1-gi/4);
+    svg+='<line x1="'+pad.l+'" y1="'+cy+'" x2="'+(W-pad.r)+'" y2="'+cy+'" stroke="#1e293b" stroke-dasharray="3 3"/>';
+    if(gi>0)svg+='<text x="'+(pad.l-4)+'" y="'+(cy+4)+'" text-anchor="end" font-size="9" fill="#475569">'+yv.toFixed(1)+'</text>';
+  }
+  svg+='<text x="13" y="'+(pad.t+cH/2)+'" text-anchor="middle" font-size="9" fill="#475569" transform="rotate(-90 13 '+(pad.t+cH/2)+')">Alt loss (km)</text>';
+  // Bars
+  for(var bi=0;bi<storms.length;bi++){
+    var s=storms[bi];
+    var cx=pad.l+slotW*(bi+0.5);
+    var barH=s.altLoss>0?(s.altLoss/maxLoss)*cH:0;
+    var by=pad.t+cH-barH;
+    var col=s.survived?'#06b6d4':'#ef4444';
+    if(barH>0){
+      svg+='<rect x="'+(cx-bw/2)+'" y="'+by+'" width="'+bw+'" height="'+barH+'" rx="3" fill="'+col+'" fill-opacity=".85"/>';
+      svg+='<text x="'+cx+'" y="'+(by-3)+'" text-anchor="middle" font-size="9" fill="'+col+'" font-family="monospace">'+s.altLoss.toFixed(1)+'</text>';
+    } else {
+      svg+='<text x="'+cx+'" y="'+(pad.t+cH-3)+'" text-anchor="middle" font-size="9" fill="#22c55e">0.0</text>';
+    }
+    var parts=s.name.split(' ');
+    svg+='<text x="'+cx+'" y="'+(pad.t+cH+12)+'" text-anchor="middle" font-size="9" fill="#64748b">'+parts[0]+'</text>';
+    svg+='<text x="'+cx+'" y="'+(pad.t+cH+22)+'" text-anchor="middle" font-size="9" fill="#475569">'+(parts[1]||'')+'</text>';
+  }
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+function renderAll(){
+  renderHeatmap();
+  renderRight();
+  renderStormChart();
+  document.getElementById('storm-sub').textContent='Altitude loss from '+S.alt+' km per storm severity \u2014 simplified 1-step integration';
+}
+
+function handleRun(){
+  var btn=document.getElementById('run-btn');
+  btn.disabled=true; btn.textContent='Computing...';
+  setTimeout(function(){
+    S.res=runAnalysis(S.alt,S.isp,S.eta,S.panels);
+    renderAll();
+    btn.disabled=false; btn.textContent='\u25B6 Run Analysis';
+    document.getElementById('hdr-status').textContent='alt='+S.alt+'km  Isp='+S.isp+'s  \u03B7='+S.eta.toFixed(2)+'  panels='+S.panels.toFixed(1)+'m\u00B2';
+  },10);
+}
+
+function setMode(m){
+  S.mode=m;
+  document.getElementById('t-quiet').className='tog '+(m==='quiet'?'on':'off');
+  document.getElementById('t-storm').className='tog '+(m==='storm'?'on':'off');
+  renderHeatmap();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════════════════
+S.tab='analysis';
+S.timeline=null;
+
+function setTab(t){
+  S.tab=t;
+  var isA=t==='analysis';
+  document.getElementById('tab-analysis').className='tab-btn '+(isA?'active':'inactive');
+  document.getElementById('tab-timeline').className='tab-btn '+(isA?'inactive':'active');
+  // Analysis panels
+  document.getElementById('main').style.display=isA?'flex':'none';
+  document.getElementById('btm').style.display=isA?'flex':'none';
+  // Timeline panel
+  var tl=document.getElementById('timeline-view');
+  tl.style.display=isA?'none':'flex';
+  if(!isA) renderTimelineChart();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TIMELINE: FILE LOAD + RENDER
+// ═══════════════════════════════════════════════════════════════════════════
+function loadTimelineFile(file){
+  if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try {
+      S.timeline=JSON.parse(e.target.result);
+      renderTimelineMeta();
+      renderTimelineChart();
+      renderTimelineEvents();
+    } catch(err) {
+      alert('Failed to parse timeline JSON: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function renderTimelineMeta(){
+  var m=S.timeline.meta;
+  var survived=m.survived;
+  var color=survived?'#22c55e':'#ef4444';
+  var deorbit=(!survived&&m.deorbit_time_h)
+    ?' &nbsp;|&nbsp; Deorbit day '+(m.deorbit_time_h/24).toFixed(1):' &nbsp;|&nbsp; Mission survived';
+  document.getElementById('tl-meta').innerHTML=
+    '<span style="font-weight:700;color:'+color+'">'+(survived?'SURVIVED':'DEORBIT')+'</span>'+
+    ' &nbsp;|&nbsp; '+m.start_date+' + '+m.days+'d'+
+    ' &nbsp;|&nbsp; Target: '+m.target_altitude_km+'km'+
+    ' &nbsp;|&nbsp; Final: '+m.final_altitude_km.toFixed(1)+' km'+
+    deorbit+
+    ' &nbsp;|&nbsp; Storms: '+m.n_storm_events+
+    (m.f107_mean?' &nbsp;|&nbsp; F10.7 mean: '+m.f107_mean:'');
+}
+
+function renderTimelineChart(){
+  if(!S.timeline) return;
+  var el=document.getElementById('tl-chart');
+  var ph=document.getElementById('tl-placeholder');
+  if(ph) ph.style.display='none';
+
+  var W=el.offsetWidth||800, H=el.offsetHeight||220;
+  if(W<20||H<20){setTimeout(renderTimelineChart,100);return;}
+
+  var data=S.timeline.timeline;
+  var events=S.timeline.events||[];
+  var meta=S.timeline.meta;
+  var alts=data.altitudes_km, rats=data.ratios, times=data.times_h;
+  var n=alts.length;
+  if(!n) return;
+
+  var pad={l:46,r:16,t:14,b:32};
+  var cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  var maxT=times[n-1]||1;
+  var minA=Math.min.apply(null,alts.concat([145]));
+  var maxA=Math.max.apply(null,alts)+8;
+  minA=Math.floor(minA/10)*10;
+  maxA=Math.ceil(maxA/10)*10;
+
+  function xp(t){return pad.l+(t/maxT)*cW;}
+  function yp(a){return pad.t+cH-((a-minA)/(maxA-minA))*cH;}
+
+  var svg='<svg width="'+W+'" height="'+H+'" xmlns="http://www.w3.org/2000/svg">';
+
+  // Y grid
+  for(var a=minA;a<=maxA;a+=10){
+    var yg=yp(a);
+    svg+='<line x1="'+pad.l+'" y1="'+yg+'" x2="'+(W-pad.r)+'" y2="'+yg+'" stroke="#1e293b" stroke-dasharray="3 3"/>';
+    svg+='<text x="'+(pad.l-5)+'" y="'+(yg+4)+'" text-anchor="end" font-size="9" fill="#475569">'+a+'</text>';
+  }
+  // X grid (day marks)
+  var totalDays=meta.days||Math.round(maxT/24);
+  var dayStep=totalDays>730?365:totalDays>180?90:totalDays>60?30:14;
+  for(var d=0;d<=totalDays;d+=dayStep){
+    var xt=xp(d*24);
+    svg+='<line x1="'+xt+'" y1="'+pad.t+'" x2="'+xt+'" y2="'+(pad.t+cH)+'" stroke="#1e293b" stroke-dasharray="3 3"/>';
+    svg+='<text x="'+xt+'" y="'+(pad.t+cH+14)+'" text-anchor="middle" font-size="9" fill="#64748b">'+d+'d</text>';
+  }
+  // Deorbit threshold
+  var yd=yp(150);
+  svg+='<line x1="'+pad.l+'" y1="'+yd+'" x2="'+(W-pad.r)+'" y2="'+yd+'" stroke="#ef4444" stroke-width="1" stroke-dasharray="6 3" opacity="0.4"/>';
+  svg+='<text x="'+(pad.l+4)+'" y="'+(yd-3)+'" font-size="8" fill="#ef4444" opacity="0.6">150 km</text>';
+
+  // Storm event vertical lines (behind the altitude line)
+  for(var ei=0;ei<events.length;ei++){
+    var ev=events[ei];
+    if(ev.type!=='storm') continue;
+    var xe=xp(ev.time_h);
+    svg+='<line x1="'+xe+'" y1="'+pad.t+'" x2="'+xe+'" y2="'+(pad.t+cH)+'" stroke="#f97316" stroke-width="1" opacity="0.45"/>';
+  }
+
+  // Altitude line (colored segments by T/D ratio)
+  for(var i2=1;i2<n;i2++){
+    var x1=xp(times[i2-1]),y1=yp(alts[i2-1]);
+    var x2=xp(times[i2]),y2=yp(alts[i2]);
+    var col=rColor(rats[i2]);
+    svg+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col+'" stroke-width="1.5"/>';
+  }
+
+  // Deorbit marker
+  if(meta.deorbit_time_h){
+    var xd2=xp(meta.deorbit_time_h);
+    svg+='<circle cx="'+xd2+'" cy="'+yp(150)+'" r="4" fill="#ef4444"/>';
+    svg+='<text x="'+(xd2+6)+'" y="'+(yp(150)+4)+'" font-size="9" fill="#ef4444">deorbit</text>';
+  }
+
+  // Axis labels
+  svg+='<text x="14" y="'+(pad.t+cH/2)+'" text-anchor="middle" font-size="9" fill="#475569" transform="rotate(-90 14 '+(pad.t+cH/2)+')">Altitude (km)</text>';
+  svg+='<text x="'+(pad.l+cW/2)+'" y="'+(H-4)+'" text-anchor="middle" font-size="9" fill="#64748b">Mission Day</text>';
+  svg+='</svg>';
+
+  el.innerHTML=svg;
+}
+
+function renderTimelineEvents(){
+  if(!S.timeline) return;
+  var events=S.timeline.events||[];
+  if(!events.length){document.getElementById('tl-events').textContent='No events flagged.';return;}
+  var html='';
+  var shown=events.slice(0,40);  // cap display
+  for(var i=0;i<shown.length;i++){
+    var ev=shown[i];
+    var typeColor=ev.type==='storm'?'#f97316':ev.type==='deorbit'?'#ef4444':'#eab308';
+    html+='<div style="display:flex;gap:8px;margin-bottom:4px;align-items:baseline">'
+      +'<span style="color:'+typeColor+';font-size:9px;flex-shrink:0;font-weight:700;text-transform:uppercase">'+ev.type+'</span>'
+      +'<span style="color:#475569;flex-shrink:0;font-family:monospace">'+ev.date+'</span>'
+      +'<span style="color:#64748b">'+ev.description+'</span>'
+      +'<span style="color:#334155;margin-left:auto;flex-shrink:0">'+(ev.altitude_km).toFixed(1)+' km</span>'
+      +'</div>';
+  }
+  if(events.length>40) html+='<div style="color:#334155;font-style:italic">… and '+(events.length-40)+' more events</div>';
+  document.getElementById('tl-events').innerHTML=html;
+}
+
+// Resize: redraw timeline chart when window resizes
+window.addEventListener('resize',function(){
+  if(S.tab==='timeline') renderTimelineChart();
+  else renderStormChart();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════
+buildSliders();
+S.res=runAnalysis(S.alt,S.isp,S.eta,S.panels);
+renderAll();
+document.getElementById('hdr-status').textContent='Default: alt='+S.alt+'km  Isp='+S.isp+'s  \u03B7='+S.eta.toFixed(2)+'  panels='+S.panels.toFixed(1)+'m\u00B2';
+</script>
+</body>
+</html>

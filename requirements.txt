@@ -1,0 +1,7 @@
+nrlmsise00>=0.1.2
+numpy>=1.23
+pandas>=1.5
+matplotlib>=3.7
+seaborn>=0.12
+anthropic>=0.20
+python-dotenv>=1.0
