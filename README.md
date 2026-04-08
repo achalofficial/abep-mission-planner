@@ -40,13 +40,13 @@ Seasonal risk windows: equinox months (March–April, September–October) at so
 ## Screenshots
 
 ### Survival Heatmap — Thrust/Drag Ratio (Altitude × Solar Flux)
-![Survival Heatmap](abep-mission-planner/outputs/survival_heatmap.png)
+![Survival Heatmap](docs/images/survival_heatmap.png)
 
 ### Failure Boundary Map
-![Boundary Map](abep-mission-planner/outputs/boundary_map.png)
+![Boundary Map](docs/images/boundary_map.png)
 
 ### Storm Recovery Timeline
-![Storm Recovery](abep-mission-planner/outputs/storm_recovery.png)
+![Storm Recovery](docs/images/storm_recovery.png)
 
 ---
 
